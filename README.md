@@ -1,74 +1,171 @@
-## Error Type
-Runtime PrismaClientValidationError
+import "dotenv/config";
+import { hash } from "bcrypt";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { PrismaClient } from "../src/generated/prisma/client";
 
-## Error Message
+const adapter = new PrismaMariaDb({
+  host: "localhost",
+  port: 3306,
+  user: "root",
+  password: "",
+  database: "eindtoets",
+});
+const prisma = new PrismaClient({ adapter });
 
-Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["prisma"].user.findUnique()` invocation in
-C:\Users\SD Student\Documents\GitHub\sd24-p07-nextjs-eindtoets-Berkay-B\.next\dev\server\chunks\ssr\[root-of-the-server]__0g61g30._.js:81:156
+async function main() {
+  // Temizleme (foreign key sırasına dikkat)
+  await prisma.announcement.deleteMany();
+  await prisma.enrollment.deleteMany();
+  await prisma.course.deleteMany();
+  await prisma.user.deleteMany();
 
-  78 ;
-  79 async function ProfilePage() {
-  80     const session = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$app$2f$lib$2f$dal$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["verifySession"])();
-→ 81     const user = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["prisma"].user.findUnique({
-           where: {
-             id: "c7e1bc26-7dae-41e7-8773-c638b5a71ea4"
-           },
-           select: {
-             id: true,
-             name: true,
-             email: true,
-             role: true,
-             createdAt: true,
-             favoriteCourses: {
-             ~~~~~~~~~~~~~~~
-               select: {
-                 id: true,
-                 name: true
-               },
-               orderBy: {
-                 name: "asc"
-               }
-             },
-             enrollments: {
-               select: {
-                 grade: true,
-                 enrolledAt: true,
-                 course: {
-                   select: {
-                     id: true,
-                     name: true
-                   }
-                 }
-               },
-               orderBy: {
-                 enrolledAt: "desc"
-               }
-             },
-         ?   password?: true,
-         ?   updatedAt?: true,
-         ?   taughtCourses?: true,
-         ?   _count?: true
-           }
-         })
+  // USERS
+  const admin = await prisma.user.create({
+    data: {
+      email: "admin@school.nl",
+      name: "Admin",
+      password: await hash("Admin123!", 10),
+      role: "ADMIN",
+    },
+  });
 
-Unknown field `favoriteCourses` for select statement on model `User`. Available options are marked with ?.
+  const docent1 = await prisma.user.create({
+    data: {
+      email: "docent1@school.nl",
+      name: "Docent Jansen",
+      password: await hash("Docent123!", 10),
+      role: "DOCENT",
+    },
+  });
 
+  const docent2 = await prisma.user.create({
+    data: {
+      email: "docent2@school.nl",
+      name: "Docent De Vries",
+      password: await hash("Docent123!", 10),
+      role: "DOCENT",
+    },
+  });
 
-    at <unknown> (app\profile\page.tsx:9:34)
-    at  ProfilePage (app\profile\page.tsx:9:16)
-    at resolveErrorDev (file://C:/Users/SD Student/Documents/GitHub/sd24-p07-nextjs-eindtoets-Berkay-B/.next/dev/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_0p3wegg._.js:1919:105)
-    at processFullStringRow (file://C:/Users/SD Student/Documents/GitHub/sd24-p07-nextjs-eindtoets-Berkay-B/.next/dev/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_0p3wegg._.js:2434:29)
-    at processFullBinaryRow (file://C:/Users/SD Student/Documents/GitHub/sd24-p07-nextjs-eindtoets-Berkay-B/.next/dev/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_0p3wegg._.js:2393:9)
-    at processBinaryChunk (file://C:/Users/SD Student/Documents/GitHub/sd24-p07-nextjs-eindtoets-Berkay-B/.next/dev/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_0p3wegg._.js:2502:221)
-    at progress (file://C:/Users/SD Student/Documents/GitHub/sd24-p07-nextjs-eindtoets-Berkay-B/.next/dev/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_0p3wegg._.js:2689:13)
+  const students = await Promise.all(
+    [1, 2, 3, 4].map(async (n) =>
+      prisma.user.create({
+        data: {
+          email: `student${n}@school.nl`,
+          name: `Student ${n}`,
+          password: await hash("Student123!", 10),
+          role: "STUDENT",
+        },
+      }),
+    ),
+  );
 
-## Code Frame
-   7 |   const session = await verifySession();
-   8 |
->  9 |   const user = await prisma.user.findUnique({
-     |                                  ^
-  10 |     where: { id: session.userId },
-  11 |     select: {
-  12 |       id: true,
+  // COURSES
+  const webDev = await prisma.course.create({
+    data: {
+      name: "Web Development",
+      description: "Leer HTML, CSS en JavaScript vanaf de basis.",
+      docentId: docent1.id,
+    },
+  });
 
-Next.js version: 16.2.0 (Turbopack)
+  const nextjs = await prisma.course.create({
+    data: {
+      name: "Next.js & Prisma",
+      description: "Full-stack apps bouwen met Next.js 16 en Prisma 7.",
+      docentId: docent1.id,
+    },
+  });
+
+  const dataBases = await prisma.course.create({
+    data: {
+      name: "Databases",
+      description: "Relationele databases, SQL en normalisatie.",
+      docentId: docent2.id,
+    },
+  });
+
+  // ENROLLMENTS
+  await prisma.enrollment.createMany({
+    data: [
+      { studentId: students[0].id, courseId: webDev.id, grade: 7.5 },
+      { studentId: students[0].id, courseId: nextjs.id },
+      { studentId: students[1].id, courseId: webDev.id, grade: 8.2 },
+      { studentId: students[1].id, courseId: dataBases.id, grade: 6.0 },
+      { studentId: students[2].id, courseId: nextjs.id, grade: 9.1 },
+      { studentId: students[3].id, courseId: dataBases.id },
+    ],
+  });
+
+  // ⭐ FAVORITES (EN ÖNEMLİ KISIM)
+  await prisma.user.update({
+    where: { id: students[0].id },
+    data: {
+      favoriteCourses: {
+        connect: [{ id: webDev.id }, { id: nextjs.id }],
+      },
+    },
+  });
+
+  await prisma.user.update({
+    where: { id: students[1].id },
+    data: {
+      favoriteCourses: {
+        connect: [{ id: dataBases.id }],
+      },
+    },
+  });
+
+  // ANNOUNCEMENTS
+  await prisma.announcement.createMany({
+    data: [
+      {
+        courseId: webDev.id,
+        title: "Welkom bij Web Dev",
+        body: "Volgende week starten we met HTML.",
+      },
+      {
+        courseId: webDev.id,
+        title: "Opdracht 1",
+        body: "Maak een simpele landingspagina.",
+      },
+      {
+        courseId: nextjs.id,
+        title: "Installatie",
+        body: "Zorg dat je Node 20+ hebt geïnstalleerd.",
+      },
+      {
+        courseId: nextjs.id,
+        title: "Eerste les",
+        body: "We beginnen met server components.",
+      },
+      {
+        courseId: dataBases.id,
+        title: "Welkom bij Databases",
+        body: "Lees hoofdstuk 1 van het boek.",
+      },
+      {
+        courseId: dataBases.id,
+        title: "Oefenopdracht",
+        body: "Normaliseer de dataset naar 3NF.",
+      },
+    ],
+  });
+
+  console.log("Database is geseeded!");
+  console.log("Login met:");
+  console.log("admin@school.nl / Admin123!");
+  console.log("docent1@school.nl / Docent123!");
+  console.log("student1@school.nl / Student123!");
+
+  void admin;
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
