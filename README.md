@@ -1,87 +1,62 @@
-"use client";
+"use server";
 
-import { useState, useTransition } from "react";
-import { changePassword } from "@/app/actions/change-password";
+import bcrypt from "bcrypt";
+import { revalidatePath } from "next/cache";
+import { verifySession } from "@/app/lib/dal";
+import { prisma } from "@/src/lib/prisma";
 
-export default function ChangePasswordForm() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+type ChangePasswordInput = {
+  currentPassword: string;
+  newPassword: string;
+};
 
-  return (
-    <form
-      className="space-y-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setMessage(null);
-        setError(null);
+type ChangePasswordResult = {
+  error?: string;
+  success?: true;
+};
 
-        startTransition(async () => {
-          const result = await changePassword({
-            currentPassword,
-            newPassword,
-          });
+export async function changePassword({
+  currentPassword,
+  newPassword,
+}: ChangePasswordInput): Promise<ChangePasswordResult> {
+  const session = await verifySession();
 
-          if (result?.error) {
-            setError(result.error);
-            return;
-          }
+  if (!currentPassword || !newPassword) {
+    return { error: "Vul alle velden in." };
+  }
 
-          setMessage("Wachtwoord succesvol gewijzigd.");
-          setCurrentPassword("");
-          setNewPassword("");
-        });
-      }}
-    >
-      <div>
-        <label
-          htmlFor="currentPassword"
-          className="block text-sm font-medium mb-1"
-        >
-          Huidig wachtwoord
-        </label>
-        <input
-          id="currentPassword"
-          name="currentPassword"
-          type="password"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          className="w-full rounded-md border px-3 py-2 text-sm"
-          required
-        />
-      </div>
+  if (newPassword.length < 6) {
+    return { error: "Nieuw wachtwoord moet minimaal 6 tekens bevatten." };
+  }
 
-      <div>
-        <label
-          htmlFor="newPassword"
-          className="block text-sm font-medium mb-1"
-        >
-          Nieuw wachtwoord
-        </label>
-        <input
-          id="newPassword"
-          name="newPassword"
-          type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          className="w-full rounded-md border px-3 py-2 text-sm"
-          required
-          minLength={6}
-        />
-      </div>
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: {
+      id: true,
+      password: true,
+    },
+  });
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {message && <p className="text-sm text-green-600">{message}</p>}
+  if (!user) {
+    return { error: "Gebruiker niet gevonden." };
+  }
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md bg-black text-white px-4 py-2 text-sm disabled:opacity-50"
-      >
-        {isPending ? "Opslaan..." : "Wachtwoord wijzigen"}
-      </button>
-    </form>
-  );
+  const passwordMatches = await bcrypt.compare(currentPassword, user.password);
+
+  if (!passwordMatches) {
+    return { error: "Huidig wachtwoord is onjuist." };
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password: hashedPassword,
+    },
+  });
+
+  revalidatePath("/profile");
+
+  return { success: true };
 }
