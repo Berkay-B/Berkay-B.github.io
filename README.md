@@ -1,164 +1,65 @@
-app/actions/admin.ts icindekiler
+"use server";
 
-""use server";
-
+import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
+import { verifySession } from "@/app/lib/dal";
 import { prisma } from "@/src/lib/prisma";
-import { requireRole } from "@/app/lib/dal";
-import { Role } from "@/src/generated/prisma/enums";
 
-export async function updateUserRole(formData: FormData) {
-  await requireRole("ADMIN");
+type ChangePasswordInput = {
+  currentPassword: string;
+  newPassword: string;
+};
 
-  const userId = formData.get("userId") as string;
-  const role = formData.get("role") as Role;
+type ChangePasswordResult = {
+  error?: string;
+  success?: true;
+};
 
-  if (!userId || !role) return;
-  if (!Object.values(Role).includes(role)) return;
+export async function changePassword({
+  currentPassword,
+  newPassword,
+}: ChangePasswordInput): Promise<ChangePasswordResult> {
+  const session = await verifySession();
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: { role },
-  });
-
-  revalidatePath("/admin/users");
-}"
-
-app/actions/auth.ts icindekiler
-
-""use server";
-
-import { hash, compare } from "bcrypt";
-import { redirect } from "next/navigation";
-import { prisma } from "@/src/lib/prisma";
-import { createSession, deleteSession } from "@/app/lib/session";
-
-export type FormState =
-  | {
-      error?: string;
-    }
-  | undefined;
-
-export async function signup(state: FormState, formData: FormData) {
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const name = formData.get("name") as string;
-
-  if (!email || !password || !name) {
-    return { error: "Vul alle velden in" };
+  if (!currentPassword || !newPassword) {
+    return { error: "Vul alle velden in." };
   }
 
-  const userExists = await prisma.user.findUnique({
-    where: { email },
-  });
-
-  if (userExists) {
-    return { error: "Email is al in gebruik" };
-  }
-
-  const hashedPassword = await hash(password, 10);
-
-  const user = await prisma.user.create({
-    data: {
-      email,
-      password: hashedPassword,
-      name,
-    },
-  });
-
-  await createSession(user.id, user.role);
-  redirect("/");
-}
-
-export async function login(state: FormState, formData: FormData) {
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-
-  if (!email || !password) {
-    return { error: "Vul alle velden in" };
+  if (newPassword.length < 6) {
+    return { error: "Nieuw wachtwoord moet minimaal 6 tekens bevatten." };
   }
 
   const user = await prisma.user.findUnique({
-    where: { email },
-  });
-
-  if (!user) {
-    return { error: "Email of wachtwoord is onjuist" };
-  }
-
-  const passwordMatch = await compare(password, user.password);
-
-  if (!passwordMatch) {
-    return { error: "Email of wachtwoord is onjuist" };
-  }
-
-  await createSession(user.id, user.role);
-  redirect("/");
-}
-
-export async function logout() {
-  await deleteSession();
-  redirect("/login");
-}
-"
-
-app/actions/courses.ts icindekiler
-
-""use server";
-
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { prisma } from "@/src/lib/prisma";
-import { requireRole } from "@/app/lib/dal";
-
-export async function createCourse(formData: FormData) {
-  const session = await requireRole("DOCENT", "ADMIN");
-
-  const name = (formData.get("name") as string)?.trim();
-  const description = (formData.get("description") as string)?.trim();
-
-  if (!name || !description) {
-    return;
-  }
-
-  const course = await prisma.course.create({
-    data: {
-      name,
-      description,
-      docentId: session.userId,
+    where: { id: session.userId },
+    select: {
+      id: true,
+      password: true,
     },
   });
 
-  revalidatePath("/courses");
-  redirect(`/courses/${course.id}`);
-}
-
-export async function addAnnouncement(courseId: string, formData: FormData) {
-  const session = await requireRole("DOCENT", "ADMIN");
-
-  const course = await prisma.course.findUnique({
-    where: { id: courseId },
-    select: { docentId: true },
-  });
-
-  if (!course) return;
-  if (session.role === "DOCENT" && course.docentId !== session.userId) {
-    return;
+  if (!user) {
+    return { error: "Gebruiker niet gevonden." };
   }
 
-  const title = (formData.get("title") as string)?.trim();
-  const body = (formData.get("body") as string)?.trim();
+  const passwordMatches = await bcrypt.compare(
+    currentPassword,
+    user.password
+  );
 
-  if (!title || !body) {
-    return;
+  if (!passwordMatches) {
+    return { error: "Huidig wachtwoord is onjuist." };
   }
 
-  await prisma.announcement.create({
-    data: { title, body, courseId },
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password: hashedPassword,
+    },
   });
 
-  revalidatePath(`/courses/${courseId}`);
-}
-"
+  revalidatePath("/profile");
 
-app/actions/enrollments.ts icindekiler
+  return { success: true };
+}
