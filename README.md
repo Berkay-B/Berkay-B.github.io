@@ -1,12 +1,12 @@
-model User {
-  id            String       @id @default(uuid())
-  email         String       @unique
-  password      String
+model Course {
+  id            String         @id @default(uuid())
   name          String
-  role          Role         @default(STUDENT)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  taughtCourses Course[]     @relation("DocentCourses")
+  description   String         @db.Text
+  docent        User           @relation("DocentCourses", fields: [docentId], references: [id])
+  docentId      String
   enrollments   Enrollment[]
-  favoriteCourses Course[]   @relation("FavoriteCourses")
+  announcements Announcement[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  favoritedBy   User[]         @relation("FavoriteCourses")
 }
