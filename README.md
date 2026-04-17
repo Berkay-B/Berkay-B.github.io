@@ -1,140 +1,87 @@
-import Link from "next/link";
-import { verifySession } from "@/app/lib/dal";
-import { prisma } from "@/src/lib/prisma";
-import ChangePasswordForm from "./ChangePasswordForm";
+"use client";
 
-export default async function ProfilePage() {
-  const session = await verifySession();
+import { useState, useTransition } from "react";
+import { changePassword } from "@/app/actions/change-password";
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      createdAt: true,
-      favoriteCourses: {
-        select: {
-          id: true,
-          name: true,
-        },
-        orderBy: {
-          name: "asc",
-        },
-      },
-      enrollments: {
-        select: {
-          grade: true,
-          enrolledAt: true,
-          course: { select: { id: true, name: true } },
-        },
-        orderBy: { enrolledAt: "desc" },
-      },
-    },
-  });
-
-  if (!user) return null;
+export default function ChangePasswordForm() {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   return (
-    <div className="max-w-3xl mx-auto py-10 px-6 space-y-10">
-      <section>
-        <h1 className="text-2xl font-semibold mb-4">Profiel</h1>
-        <dl className="text-sm space-y-1">
-          <div>
-            <dt className="inline font-medium">Naam: </dt>
-            <dd className="inline">{user.name}</dd>
-          </div>
-          <div>
-            <dt className="inline font-medium">E-mail: </dt>
-            <dd className="inline">{user.email}</dd>
-          </div>
-          <div>
-            <dt className="inline font-medium">Rol: </dt>
-            <dd className="inline">{user.role}</dd>
-          </div>
-          <div>
-            <dt className="inline font-medium">Lid sinds: </dt>
-            <dd className="inline">
-              {user.createdAt.toLocaleDateString("nl-NL")}
-            </dd>
-          </div>
-        </dl>
-      </section>
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setMessage(null);
+        setError(null);
 
-      <section className="border rounded-lg p-5 bg-white">
-        <h2 className="text-lg font-semibold mb-2">Wachtwoord wijzigen</h2>
-        <p className="text-sm text-zinc-600 mb-4">
-          Wijzig hier je wachtwoord om je account veilig te houden.
-        </p>
-        <ChangePasswordForm />
-      </section>
+        startTransition(async () => {
+          const result = await changePassword({
+            currentPassword,
+            newPassword,
+          });
 
-      {user.role === "STUDENT" && (
-        <section>
-          <h2 className="text-lg font-semibold mb-2">Mijn favoriete cursussen</h2>
-          {user.favoriteCourses.length === 0 ? (
-            <p className="text-sm text-zinc-600">
-              Je hebt nog geen favoriete cursussen.
-            </p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {user.favoriteCourses.map((course) => (
-                <li key={course.id}>
-                  <Link href={`/courses/${course.id}`} className="underline">
-                    {course.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+          if (result?.error) {
+            setError(result.error);
+            return;
+          }
 
-      {user.role === "STUDENT" && (
-        <section>
-          <h2 className="text-lg font-semibold mb-2">Mijn inschrijvingen</h2>
-          {user.enrollments.length === 0 ? (
-            <p className="text-sm text-zinc-600">
-              Je bent nog niet ingeschreven.{" "}
-              <Link href="/courses" className="underline">
-                Bekijk cursussen
-              </Link>
-              .
-            </p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-left text-zinc-600">
-                <tr>
-                  <th className="py-2">Cursus</th>
-                  <th className="py-2">Ingeschreven</th>
-                  <th className="py-2">Cijfer</th>
-                </tr>
-              </thead>
-              <tbody>
-                {user.enrollments.map((e) => (
-                  <tr key={e.course.id} className="border-t">
-                    <td className="py-2">
-                      <Link
-                        href={`/courses/${e.course.id}`}
-                        className="underline"
-                      >
-                        {e.course.name}
-                      </Link>
-                    </td>
-                    <td className="py-2">
-                      {e.enrolledAt.toLocaleDateString("nl-NL")}
-                    </td>
-                    <td className="py-2">
-                      {e.grade === null ? "nog geen" : e.grade.toFixed(1)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-      )}
-    </div>
+          setMessage("Wachtwoord succesvol gewijzigd.");
+          setCurrentPassword("");
+          setNewPassword("");
+        });
+      }}
+    >
+      <div>
+        <label
+          htmlFor="currentPassword"
+          className="block text-sm font-medium mb-1"
+        >
+          Huidig wachtwoord
+        </label>
+        <input
+          id="currentPassword"
+          name="currentPassword"
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          className="w-full rounded-md border px-3 py-2 text-sm"
+          required
+        />
+      </div>
+
+      <div>
+        <label
+          htmlFor="newPassword"
+          className="block text-sm font-medium mb-1"
+        >
+          Nieuw wachtwoord
+        </label>
+        <input
+          id="newPassword"
+          name="newPassword"
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="w-full rounded-md border px-3 py-2 text-sm"
+          required
+          minLength={6}
+        />
+      </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {message && <p className="text-sm text-green-600">{message}</p>}
+
+      <button
+        type="submit"
+        disabled={isPending}
+        className="rounded-md bg-black text-white px-4 py-2 text-sm disabled:opacity-50"
+      >
+        {isPending ? "Opslaan..." : "Wachtwoord wijzigen"}
+      </button>
+    </form>
   );
 }
