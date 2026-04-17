@@ -1,10 +1,9 @@
-courses/[id]/page.tsx bu sekilde 
-
-"import { notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import { verifySession } from "@/app/lib/dal";
 import { prisma } from "@/src/lib/prisma";
 import { addAnnouncement } from "@/app/actions/courses";
 import { enroll, leave, setGrade } from "@/app/actions/enrollments";
+import FavoriteButton from "./FavoriteButton";
 
 export default async function CoursePage({
   params,
@@ -23,6 +22,13 @@ export default async function CoursePage({
         include: { student: { select: { name: true, email: true } } },
         orderBy: { enrolledAt: "asc" },
       },
+      favoritedBy:
+        session.role === "STUDENT"
+          ? {
+              where: { id: session.userId },
+              select: { id: true },
+            }
+          : false,
     },
   });
 
@@ -37,6 +43,11 @@ export default async function CoursePage({
       ? course.enrollments.find((e) => e.studentId === session.userId)
       : null;
 
+  const isFavorite =
+    session.role === "STUDENT" &&
+    Array.isArray(course.favoritedBy) &&
+    course.favoritedBy.length > 0;
+
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
       <h1 className="text-2xl font-semibold">{course.name}</h1>
@@ -46,7 +57,12 @@ export default async function CoursePage({
       <p className="mb-6">{course.description}</p>
 
       {session.role === "STUDENT" && (
-        <section className="mb-8">
+        <section className="mb-8 space-y-3">
+          <FavoriteButton
+            courseId={course.id}
+            initialIsFavorite={Boolean(isFavorite)}
+          />
+
           {myEnrollment ? (
             <form action={leave.bind(null, course.id)}>
               <p className="text-sm mb-2">
@@ -166,53 +182,3 @@ export default async function CoursePage({
     </div>
   );
 }
-"
-
-course/page.tsx bu sekilde
-
-"import Link from "next/link";
-import { verifySession } from "@/app/lib/dal";
-import { prisma } from "@/src/lib/prisma";
-import CourseFilter from "@/app/courses/course-filter";
-
-export default async function CoursesPage() {
-  const session = await verifySession();
-
-  const courses = await prisma.course.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      docent: { select: { name: true } },
-      _count: { select: { enrollments: true } },
-    },
-  });
-
-  return (
-    <div className="max-w-3xl mx-auto py-10 px-6">
-      <div className="flex items-baseline justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Cursussen</h1>
-        {(session.role === "DOCENT" || session.role === "ADMIN") && (
-          <Link
-            href="/courses/new"
-            className="rounded bg-black text-white px-3 py-1 text-sm"
-          >
-            Nieuwe cursus
-          </Link>
-        )}
-      </div>
-
-      <CourseFilter
-        courses={courses.map((c) => ({
-          id: c.id,
-          name: c.name,
-          description: c.description,
-          docentName: c.docent.name,
-          enrollmentCount: c._count.enrollments,
-        }))}
-      />
-    </div>
-  );
-}
-"
