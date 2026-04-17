@@ -1,65 +1,20 @@
-"use server";
+## Error Type
+Build Error
 
-import bcrypt from "bcryptjs";
-import { revalidatePath } from "next/cache";
-import { verifySession } from "@/app/lib/dal";
-import { prisma } from "@/src/lib/prisma";
+## Error Message
+Module not found: Can't resolve 'bcryptjs'
 
-type ChangePasswordInput = {
-  currentPassword: string;
-  newPassword: string;
-};
+## Build Output
+./app/actions/change-password.ts:3:1
+Module not found: Can't resolve 'bcryptjs'
+  1 | "use server";
+  2 |
+> 3 | import bcrypt from "bcryptjs";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 | import { revalidatePath } from "next/cache";
+  5 | import { verifySession } from "@/app/lib/dal";
+  6 | import { prisma } from "@/src/lib/prisma";
 
-type ChangePasswordResult = {
-  error?: string;
-  success?: true;
-};
+https://nextjs.org/docs/messages/module-not-found
 
-export async function changePassword({
-  currentPassword,
-  newPassword,
-}: ChangePasswordInput): Promise<ChangePasswordResult> {
-  const session = await verifySession();
-
-  if (!currentPassword || !newPassword) {
-    return { error: "Vul alle velden in." };
-  }
-
-  if (newPassword.length < 6) {
-    return { error: "Nieuw wachtwoord moet minimaal 6 tekens bevatten." };
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: {
-      id: true,
-      password: true,
-    },
-  });
-
-  if (!user) {
-    return { error: "Gebruiker niet gevonden." };
-  }
-
-  const passwordMatches = await bcrypt.compare(
-    currentPassword,
-    user.password
-  );
-
-  if (!passwordMatches) {
-    return { error: "Huidig wachtwoord is onjuist." };
-  }
-
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      password: hashedPassword,
-    },
-  });
-
-  revalidatePath("/profile");
-
-  return { success: true };
-}
+Next.js version: 16.2.0 (Turbopack)
