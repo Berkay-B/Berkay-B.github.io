@@ -1,87 +1,164 @@
-"use client";
+app/actions/admin.ts icindekiler
 
-import { useState, useTransition } from "react";
-import { changePassword } from "@/app/actions/change-password";
+""use server";
 
-export default function ChangePasswordForm() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/src/lib/prisma";
+import { requireRole } from "@/app/lib/dal";
+import { Role } from "@/src/generated/prisma/enums";
 
-  return (
-    <form
-      className="space-y-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setMessage(null);
-        setError(null);
+export async function updateUserRole(formData: FormData) {
+  await requireRole("ADMIN");
 
-        startTransition(async () => {
-          const result = await changePassword({
-            currentPassword,
-            newPassword,
-          });
+  const userId = formData.get("userId") as string;
+  const role = formData.get("role") as Role;
 
-          if (result?.error) {
-            setError(result.error);
-            return;
-          }
+  if (!userId || !role) return;
+  if (!Object.values(Role).includes(role)) return;
 
-          setMessage("Wachtwoord succesvol gewijzigd.");
-          setCurrentPassword("");
-          setNewPassword("");
-        });
-      }}
-    >
-      <div>
-        <label
-          htmlFor="currentPassword"
-          className="block text-sm font-medium mb-1"
-        >
-          Huidig wachtwoord
-        </label>
-        <input
-          id="currentPassword"
-          name="currentPassword"
-          type="password"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          className="w-full rounded-md border px-3 py-2 text-sm"
-          required
-        />
-      </div>
+  await prisma.user.update({
+    where: { id: userId },
+    data: { role },
+  });
 
-      <div>
-        <label
-          htmlFor="newPassword"
-          className="block text-sm font-medium mb-1"
-        >
-          Nieuw wachtwoord
-        </label>
-        <input
-          id="newPassword"
-          name="newPassword"
-          type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          className="w-full rounded-md border px-3 py-2 text-sm"
-          required
-          minLength={6}
-        />
-      </div>
+  revalidatePath("/admin/users");
+}"
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {message && <p className="text-sm text-green-600">{message}</p>}
+app/actions/auth.ts icindekiler
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md bg-black text-white px-4 py-2 text-sm disabled:opacity-50"
-      >
-        {isPending ? "Opslaan..." : "Wachtwoord wijzigen"}
-      </button>
-    </form>
-  );
+""use server";
+
+import { hash, compare } from "bcrypt";
+import { redirect } from "next/navigation";
+import { prisma } from "@/src/lib/prisma";
+import { createSession, deleteSession } from "@/app/lib/session";
+
+export type FormState =
+  | {
+      error?: string;
+    }
+  | undefined;
+
+export async function signup(state: FormState, formData: FormData) {
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+  const name = formData.get("name") as string;
+
+  if (!email || !password || !name) {
+    return { error: "Vul alle velden in" };
+  }
+
+  const userExists = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (userExists) {
+    return { error: "Email is al in gebruik" };
+  }
+
+  const hashedPassword = await hash(password, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      password: hashedPassword,
+      name,
+    },
+  });
+
+  await createSession(user.id, user.role);
+  redirect("/");
 }
+
+export async function login(state: FormState, formData: FormData) {
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+
+  if (!email || !password) {
+    return { error: "Vul alle velden in" };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (!user) {
+    return { error: "Email of wachtwoord is onjuist" };
+  }
+
+  const passwordMatch = await compare(password, user.password);
+
+  if (!passwordMatch) {
+    return { error: "Email of wachtwoord is onjuist" };
+  }
+
+  await createSession(user.id, user.role);
+  redirect("/");
+}
+
+export async function logout() {
+  await deleteSession();
+  redirect("/login");
+}
+"
+
+app/actions/courses.ts icindekiler
+
+""use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { prisma } from "@/src/lib/prisma";
+import { requireRole } from "@/app/lib/dal";
+
+export async function createCourse(formData: FormData) {
+  const session = await requireRole("DOCENT", "ADMIN");
+
+  const name = (formData.get("name") as string)?.trim();
+  const description = (formData.get("description") as string)?.trim();
+
+  if (!name || !description) {
+    return;
+  }
+
+  const course = await prisma.course.create({
+    data: {
+      name,
+      description,
+      docentId: session.userId,
+    },
+  });
+
+  revalidatePath("/courses");
+  redirect(`/courses/${course.id}`);
+}
+
+export async function addAnnouncement(courseId: string, formData: FormData) {
+  const session = await requireRole("DOCENT", "ADMIN");
+
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { docentId: true },
+  });
+
+  if (!course) return;
+  if (session.role === "DOCENT" && course.docentId !== session.userId) {
+    return;
+  }
+
+  const title = (formData.get("title") as string)?.trim();
+  const body = (formData.get("body") as string)?.trim();
+
+  if (!title || !body) {
+    return;
+  }
+
+  await prisma.announcement.create({
+    data: { title, body, courseId },
+  });
+
+  revalidatePath(`/courses/${courseId}`);
+}
+"
+
+app/actions/enrollments.ts icindekiler
