@@ -1,18 +1,18 @@
-generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
-}
+import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 
-datasource db {
-  provider = "mysql"
-}
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
 
-model Game {
-  id        Int      @id @default(autoincrement())
-  title     String
-  price     Float
-  genre     String
-  sales     Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+const adapter = new PrismaMariaDb({
+  host: "localhost",
+  user: "root",
+  password: "",
+  database: "game_marketplace",
+  port: 3306,
+});
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
