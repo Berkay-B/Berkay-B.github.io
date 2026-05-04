@@ -1,5 +1,3 @@
-layout suan bu sekilde once benim kodumu gor ona gore ayarlayalim yani simdi layout a ne yaziyim
-
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
@@ -26,22 +24,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <nav className="flex gap-4 p-4 border-b border-zinc-200 dark:border-zinc-800">
-          <Link href="/" className="hover:text-blue-500 transition-colors">
-            Docs
+    <html lang="nl">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <nav className="flex gap-6 p-4 border-b border-zinc-200 bg-zinc-900 text-white">
+          <Link href="/" className="hover:text-orange-400 transition-colors">
+            Home
           </Link>
-          <Link href="/dashboard" className="hover:text-blue-500 transition-colors">
+          <Link href="/dashboard" className="hover:text-orange-400 transition-colors">
             Dashboard
           </Link>
-          <Link href="/games" className="hover:text-blue-500 transition-colors">
+          <Link href="/games" className="hover:text-orange-400 transition-colors">
             Games
           </Link>
         </nav>
-        {children}
+
+        <main className="p-6">{children}</main>
       </body>
     </html>
   );
