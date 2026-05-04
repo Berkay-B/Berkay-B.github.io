@@ -1,18 +1,28 @@
-import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import Link from "next/link";
+import "./globals.css";
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="nl">
+      <body>
+        <nav className="bg-gray-900 text-white p-4 flex gap-6">
+          <Link href="/" className="hover:text-orange-400">
+            Home
+          </Link>
+          <Link href="/games" className="hover:text-orange-400">
+            Games
+          </Link>
+          <Link href="/dashboard" className="hover:text-orange-400">
+            Dashboard
+          </Link>
+        </nav>
 
-const adapter = new PrismaMariaDb({
-  host: "localhost",
-  user: "root",
-  password: "",
-  database: "game_marketplace",
-  port: 3306,
-});
-
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+        <main className="p-6">{children}</main>
+      </body>
+    </html>
+  );
+}
